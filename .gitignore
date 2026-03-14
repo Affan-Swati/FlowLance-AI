@@ -1,0 +1,28 @@
+# Python Virtual Environment
+venv/
+ENV/
+bin/
+lib/
+include/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Models
+models/*.gguf
+
+# Datasets
+datasets/
+
+# Databases
+database/
+chroma_db/
+
+# Environment secrets
+.env
+
+# OS files
+.DS_Store
+Thumbs.db

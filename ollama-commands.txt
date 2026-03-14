@@ -1,0 +1,5 @@
+# Create porposal model
+ollama create flowlance-proposal -f Modelfiles/proposal.Modelfile
+
+#Run proposal model
+ollama run flowlance-proposal
