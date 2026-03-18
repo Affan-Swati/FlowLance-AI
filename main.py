@@ -3,6 +3,7 @@ import logging
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from agents.scanner_agent import scan_resume
 from agents.rag_ingestor import process_and_store_resume
+from agents.search_agent import search_freelancers
 from dotenv import load_dotenv
 import uvicorn
 
@@ -32,6 +33,21 @@ async def process_resume_api(user_id: str = Form(...), file: UploadFile = File(.
         }
     except Exception as e:
         logger.error(f"Pipeline Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/agents/resume/search")
+async def search_talent(query: str, limit: int = 5, user_id: str = None):
+    try:
+        logger.info(f"Searching for: {query}")
+        results = search_freelancers(query, limit, user_id)
+        
+        return {
+            "status": "success",
+            "count": len(results),
+            "results": results
+        }
+    except Exception as e:
+        logger.error(f"Search Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
