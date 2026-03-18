@@ -1,17 +1,33 @@
 import os
 import logging
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from pydantic import BaseModel
+from typing import Optional
+from dotenv import load_dotenv
+import uvicorn
+
+# Import our agents and the compiled LangGraph
 from agents.scanner_agent import scan_resume
 from agents.rag_ingestor import process_and_store_resume
 from agents.search_agent import search_freelancers
-from dotenv import load_dotenv
-import uvicorn
+from agents.Proposal.proposal_graph import proposal_agent_graph
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
+
+# --- Schemas ---
+
+class ProposalRequest(BaseModel):
+    thread_id: str                # Unique session ID from Node.js
+    user_id: str
+    job_title: Optional[str] = None
+    job_description: Optional[str] = None
+    user_prompt: Optional[str] = ""
+
+# --- Routes ---
 
 @app.post("/api/agents/resume/process")
 async def process_resume_api(user_id: str = Form(...), file: UploadFile = File(...)):
@@ -48,6 +64,37 @@ async def search_talent(query: str, limit: int = 5, user_id: str = None):
         }
     except Exception as e:
         logger.error(f"Search Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/agents/proposal/generate")
+async def generate_proposal_api(request: ProposalRequest):
+    try:
+        # 1. Setup LangGraph Config with the thread_id for MongoDB persistence
+        config = {"configurable": {"thread_id": request.thread_id}}
+        
+        # 2. Prepare the input state
+        # Note: 'is_accepted' removed to simplify the flow for continuous chat
+        input_state = {
+            "user_id": request.user_id,
+            "job_title": request.job_title,
+            "job_description": request.job_description,
+            "user_prompt": request.user_prompt
+        }
+        
+        # 3. Invoke the graph
+        # LangGraph automatically checks the MongoDB 'proposal_checkpoints' collection.
+        # If thread_id exists: it loads memory (resume_context/current_draft) and refines.
+        # If thread_id is new: it starts fresh (RAG -> Draft).
+        final_state = proposal_agent_graph.invoke(input_state, config=config)
+        
+        return {
+            "status": "success",
+            "thread_id": request.thread_id,
+            "proposal": final_state.get("current_draft", "")
+        }
+        
+    except Exception as e:
+        logger.error(f"Proposal Generation Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

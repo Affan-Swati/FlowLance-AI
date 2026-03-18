@@ -12,3 +12,5 @@ langchain-groq
 python-dotenv
 langchain-mongodb
 pymongo
+langgraph
+langgraph-checkpoint-mongodb

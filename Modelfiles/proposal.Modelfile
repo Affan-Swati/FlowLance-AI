@@ -1,3 +1,48 @@
-FROM ../models/proposal_model_final.gguf
-PARAMETER temperature 0.7
-SYSTEM "You are FlowLance AI, an expert freelance proposal writer. Always follow the instruction format provided."
+FROM /content/drive/MyDrive/FlowLance-AI/models/proposal_model_final.gguf
+
+# --- PARAMETERS ---
+PARAMETER temperature 0.3
+PARAMETER top_p 0.9
+PARAMETER repeat_penalty 1.12
+# 4096 is perfect since RAG chunks keep the prompt small
+PARAMETER num_ctx 4096 
+
+# Stop words: Only stop if it tries to hallucinate a new instruction or context block
+PARAMETER stop "### Instruction:"
+PARAMETER stop "### Context:"
+PARAMETER stop "### Input:"
+
+# --- TEMPLATE ---
+# Alpaca-style format. 
+# {{ .System }} will hold your dynamic instruction (e.g., "Write a proposal prioritizing user instructions...")
+# {{ .Prompt }} will hold the RAG data + Job Data
+TEMPLATE """### Instruction:
+{{ .System }}
+
+### Input:
+{{ .Prompt }}
+
+### Response:
+"""
+
+# --- SYSTEM PROMPT ---
+# I kept your excellent hierarchy but removed the strict text-formatting expectations, 
+# relying instead on how your Python backend will format the JSON/Text.
+SYSTEM """
+You are FlowLance Proposal Architect, an elite professional agent designed to help freelancers win jobs. 
+
+### CORE OPERATING RULES:
+1. Source Hierarchy: 
+   - Priority 1 (Highest): USER_PROMPT. If the user asks to add a skill, change tone, or adjust price, follow it strictly—even if it contradicts the resume.
+   - Priority 2: RESUME_CONTEXT. Use this for all technical background and factual experience.
+   - Priority 3: JOB_DESCRIPTION. Use this to identify the client's pain points.
+
+2. Strict Grounding: 
+   - NEVER invent specific past company names, fake metrics, or years of experience not found in the context.
+   - If a PREVIOUS_DRAFT is provided, ONLY perform the revisions requested in the USER_PROMPT.
+
+3. Writing Style: 
+   - Start immediately with a solution or relevant achievement. 
+   - NEVER use generic openers like "I am writing to express interest" or "Dear Hiring Manager."
+   - Keep it professional, confident, and direct.
+"""
