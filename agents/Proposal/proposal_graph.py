@@ -30,7 +30,6 @@ class ProposalState(TypedDict):
     user_prompt: str
     resume_context: str
     current_draft: str
-    is_accepted: bool
 
 # ==========================================
 # 3. Define the Nodes

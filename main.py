@@ -26,6 +26,7 @@ class ProposalRequest(BaseModel):
     job_title: Optional[str] = None
     job_description: Optional[str] = None
     user_prompt: Optional[str] = ""
+    current_draft: Optional[str] = None
 
 # --- Routes ---
 
@@ -69,11 +70,9 @@ async def search_talent(query: str, limit: int = 5, user_id: str = None):
 @app.post("/api/agents/proposal/generate")
 async def generate_proposal_api(request: ProposalRequest):
     try:
-        # 1. Setup LangGraph Config with the thread_id for MongoDB persistence
         config = {"configurable": {"thread_id": request.thread_id}}
         
-        # 2. Prepare the input state
-        # Note: 'is_accepted' removed to simplify the flow for continuous chat
+        # 2. 🚀 Update the input state mapping
         input_state = {
             "user_id": request.user_id,
             "job_title": request.job_title,
@@ -81,10 +80,13 @@ async def generate_proposal_api(request: ProposalRequest):
             "user_prompt": request.user_prompt
         }
         
+        # Only inject the draft if the user actually sent one (during a refinement)
+        if request.current_draft:
+            input_state["current_draft"] = request.current_draft
+            
         # 3. Invoke the graph
-        # LangGraph automatically checks the MongoDB 'proposal_checkpoints' collection.
-        # If thread_id exists: it loads memory (resume_context/current_draft) and refines.
-        # If thread_id is new: it starts fresh (RAG -> Draft).
+        # Because 'current_draft' is standard TypedDict, passing it here
+        # AUTOMATICALLY overrides whatever LangGraph had saved in MongoDB!
         final_state = proposal_agent_graph.invoke(input_state, config=config)
         
         return {
