@@ -19,23 +19,32 @@ def clean_output(text: str) -> str:
 
 def generate_draft_action(job_title, job_description, resume_context, user_prompt, current_draft):
     # EXPANDED FEW-SHOT EXAMPLES: 
-    # This teaches the model to write a full, compelling proposal rather than a short summary.
+    # Showing diverse tones (conversational, direct, problem-solving) and varied openers.
     examples = """
     === BEHAVIORAL EXAMPLES ===
     
     EXAMPLE 1: THE "RESUME DUMP" (BAD - DO NOT DO THIS)
     "I am a great fit. My Technical Skills include TypeScript, Angular, React, Node.js, Python, MongoDB, AWS, Kubernetes, Docker. At Motive I was a Software Engineering Intern. I also built FlowLance using MERN and am the Head of Team Valorant. Let me know if you want to hire me!"
-    [CRITIQUE: Failed. Dumped the whole JSON array. Too short. Unprofessional tone. Included irrelevant gaming experience.]
+    [CRITIQUE: Failed. Dumped the whole JSON array. Too short. Unprofessional. Uses irrelevant gaming experience.]
 
-    EXAMPLE 2: THE "PROFESSIONAL ARCHITECT" (GOOD - EXACTLY WHAT WE WANT)
+    EXAMPLE 2: CONVERSATIONAL & METRIC-DRIVEN (GOOD)
     "Hi there, I noticed you are looking for an Angular & TypeScript developer to build a highly reliable SaaS dashboard.
+    During my time as a Software Engineering Intern at Motive, I architected and shipped modular solutions for the Equipment Monitoring product. By leveraging TypeScript and RESTful API integration, I delivered features that served over 120,000 businesses. 
+    To ensure the high reliability your project demands, I utilized Test-Driven Development (TDD) behind feature flags. 
+    I would love to bring this same scalable design to your team. Let's connect to discuss your dashboard."
+    [CRITIQUE: Perfect. Friendly opener, metric-driven evidence, specific technical tools mentioned.]
 
-    During my time as a Software Engineering Intern at Motive, I architected and shipped modular solutions for the Equipment Monitoring product. By leveraging TypeScript and RESTful API integration, I successfully delivered end-to-end features that served over 120,000 businesses across the physical economy. 
+    EXAMPLE 3: DIRECT & IMPACT-FOCUSED (GOOD)
+    "Building a centralized dashboard requires robust backend architecture and seamless frontend execution. 
+    For FlowLance, an AI-powered freelancer platform, I engineered a comprehensive MERN stack solution that automated gig management and client invoicing. By integrating AI agents for smart analytics and transaction categorization, I streamlined complex workflows into an intuitive interface. 
+    I am available to bring this same full-stack expertise to your project and would be happy to discuss your specific requirements in detail."
+    [CRITIQUE: Perfect. No "Hi there" greeting—jumps straight into the value prop. Uses the FlowLance project instead of Motive. Highly professional.]
 
-    To ensure the high reliability your project demands, I actively utilized Test-Driven Development (TDD) behind feature flags. This approach allowed for controlled rollouts and maintained backward compatibility, resulting in zero-downtime releases.
-
-    I would love to bring this same level of technical rigor and scalable design to your team. Let's connect to discuss how we can accelerate your dashboard's development."
-    [CRITIQUE: Perfect. Uses 3-4 professional paragraphs. Weaves specific metrics (120,000 businesses) and skills (TypeScript, TDD, Feature Flags) into a compelling narrative. Ignores irrelevant skills like Python or Valorant.]
+    EXAMPLE 4: CONSULTATIVE & TECHNICAL (GOOD)
+    "Your requirement for a context-aware AI pipeline aligns perfectly with my recent work on a Multimodal RAG & Semantic Search System. 
+    I recently deployed a robust solution using LLaMA2, Sentence-BERT, and FAISS to handle both text and image queries from complex PDFs. By leveraging CoT and few-shot prompting alongside Flask and LlamaIndex, I ensured highly accurate and context-aware responses. 
+    I am ready to implement a similarly efficient AI architecture for your data retrieval needs."
+    [CRITIQUE: Perfect. Directly addresses the client's problem. Highly technical, focusing purely on the AI stack from the resume.]
     """
 
     if current_draft:
@@ -53,7 +62,7 @@ def generate_draft_action(job_title, job_description, resume_context, user_promp
             "SYSTEM MODE: PROPOSAL ARCHITECT.\n"
             "TASK: Write a highly professional, comprehensive 3-4 paragraph job proposal.\n"
             "COGNITIVE WORKFLOW:\n"
-            "Step 1: Hook - Start by addressing the client's specific need based on the JOB DESCRIPTION.\n"
+            "Step 1: Hook - Start by addressing the client's specific need based on the JOB DESCRIPTION. VARY YOUR OPENINGS (e.g., use a professional greeting, or jump straight into a direct value statement). Do not always say 'Hi there'.\n"
             "Step 2: Evidence - Select the single most relevant 'Work Experience' from the JSON and describe it professionally. Include metrics.\n"
             "Step 3: User Overrides - Check the USER REQUEST. If it asks to include specific skills or details not in the JSON, you MUST include them and weave them in naturally.\n"
             "Step 4: Closing - End with a confident, forward-looking call to action.\n"
@@ -74,9 +83,9 @@ def generate_draft_action(job_title, job_description, resume_context, user_promp
         "prompt": context_payload, 
         "stream": False,
         "options": {
-            "temperature": 0.2,    # Slightly higher than 0.1 to allow for more natural sentence flow
+            "temperature": 0.2,    
             "top_p": 0.9,
-            "repeat_penalty": 1.3, # Relaxed slightly from 1.5 so it can write longer paragraphs without breaking
+            "repeat_penalty": 1.3, 
             "stop": ["###", "User:", "Assistant:", "=== BEHAVIORAL EXAMPLES ==="]
         }
     }
