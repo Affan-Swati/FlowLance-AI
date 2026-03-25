@@ -2,7 +2,7 @@ import os
 import logging
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from dotenv import load_dotenv
 import uvicorn
 
@@ -11,6 +11,7 @@ from agents.scanner_agent import scan_resume
 from agents.rag_ingestor import process_and_store_resume
 from agents.search_agent import search_freelancers
 from agents.Proposal.proposal_graph import proposal_agent_graph
+from agents.analytics_agent import get_market_trends, generate_career_insights, classify_user_domain
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -27,6 +28,12 @@ class ProposalRequest(BaseModel):
     job_description: Optional[str] = None
     user_prompt: Optional[str] = ""
     current_draft: Optional[str] = None
+
+class AnalyticsPayload(BaseModel):
+    freelancerProfile: Dict[str, Any]
+    portfolioHistory: List[Dict[str, Any]]
+    domain: Optional[str] = None
+    resumeData: Optional[Dict[str, Any]] = None
 
 # --- Routes ---
 
@@ -97,6 +104,39 @@ async def generate_proposal_api(request: ProposalRequest):
         
     except Exception as e:
         logger.error(f"Proposal Generation Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/api/analyze-portfolio")
+async def analyze_portfolio_api(payload: AnalyticsPayload):
+    try:
+        logger.info(f"Analyzing portfolio for user: {payload.freelancerProfile.get('username')}")
+        
+        user_data = {
+            "profile": payload.freelancerProfile,
+            "history": payload.portfolioHistory,
+            "resume_data": payload.resumeData
+        }
+
+        # 1. DYNAMIC DOMAIN CLASSIFICATION
+        domain = payload.domain
+        if not domain:
+            domain = classify_user_domain(user_data)
+        
+        # 2. Fetch Market Trends based on the dynamically determined domain
+        market_trends = get_market_trends(domain)
+        
+        # 3. Generate Hugging Face AI Insights
+        generated_text = generate_career_insights(user_data, market_trends)
+        
+        # 4. Return combined package back to Node.js
+        return {
+            "status": "success",
+            "market_trends": market_trends,
+            "ai_insights_text": generated_text
+        }
+        
+    except Exception as e:
+        logger.error(f"Portfolio Analysis Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
