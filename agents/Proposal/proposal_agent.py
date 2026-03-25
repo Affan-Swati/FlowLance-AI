@@ -97,4 +97,4 @@ def generate_draft_action(job_title, job_description, resume_context, user_promp
         return clean_output(raw_text)
     except Exception as e:
         print(f"❌ LLM Generation Error: {e}")
-        return "Error: Could not generate proposal."
+        raise RuntimeError(f"Ollama Connection Error: Make sure Ollama is running at {OLLAMA_ENDPOINT}. Details: {e}")
