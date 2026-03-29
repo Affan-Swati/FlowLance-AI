@@ -8,7 +8,7 @@ import uvicorn
 
 # Import our agents and the compiled LangGraph
 from agents.scanner_agent import scan_resume
-from agents.rag_ingestor import process_and_store_resume
+from agents.rag_ingestor import process_and_store_resume, remove_resume # Added remove_resume import
 from agents.search_agent import search_freelancers
 from agents.Proposal.proposal_graph import proposal_agent_graph
 from agents.analytics_agent import get_market_trends, generate_career_insights, classify_user_domain
@@ -38,20 +38,25 @@ class AnalyticsPayload(BaseModel):
 # --- Routes ---
 
 @app.post("/api/agents/resume/process")
-async def process_resume_api(user_id: str = Form(...), file: UploadFile = File(...)):
+async def process_resume_api(
+    user_id: str = Form(...), 
+    resume_id: str = Form(...), # Now explicitly expecting resume_id from Node.js
+    file: UploadFile = File(...)
+):
     try:
-        logger.info(f"Processing upload for User: {user_id}")
+        logger.info(f"Processing upload for User: {user_id}, Resume: {resume_id}")
         file_bytes = await file.read()
         
         # 1. Parse PDF
         extracted_data = scan_resume(file_bytes)
         
-        # 2. Ingest into RAG and MongoDB
-        ingestion_result = process_and_store_resume(user_id, extracted_data)
+        # 2. Ingest into RAG and MongoDB with the unique resume_id
+        ingestion_result = process_and_store_resume(user_id, resume_id, extracted_data)
         
         return {
             "status": "success",
             "user_id": user_id,
+            "resume_id": resume_id,
             "data": extracted_data,
             "ingestion": ingestion_result
         }
@@ -59,11 +64,33 @@ async def process_resume_api(user_id: str = Form(...), file: UploadFile = File(.
         logger.error(f"Pipeline Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.delete("/api/agents/resume/{resume_id}")
+async def delete_resume_api(resume_id: str, user_id: str):
+    """
+    Deletes a specific resume's vectors and raw data.
+    Requires user_id as a query parameter for security/scoping.
+    """
+    try:
+        logger.info(f"Deleting Resume: {resume_id} for User: {user_id}")
+        
+        deletion_result = remove_resume(user_id, resume_id)
+        
+        return {
+            "status": "success",
+            "deletion": deletion_result
+        }
+    except Exception as e:
+        logger.error(f"Deletion Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/agents/resume/search")
-async def search_talent(query: str, limit: int = 5, user_id: str = None):
+async def search_talent(query: str, limit: int = 5, user_id: str = None, resume_id: str = None):
     try:
         logger.info(f"Searching for: {query}")
-        results = search_freelancers(query, limit, user_id)
+        # Pass the new optional resume_id parameter to the search function
+        results = search_freelancers(query, limit, user_id, resume_id)
         
         return {
             "status": "success",
@@ -79,7 +106,7 @@ async def generate_proposal_api(request: ProposalRequest):
     try:
         config = {"configurable": {"thread_id": request.thread_id}}
         
-        # 2. 🚀 Update the input state mapping
+        # 2. Update the input state mapping
         input_state = {
             "user_id": request.user_id,
             "job_title": request.job_title,
@@ -92,8 +119,6 @@ async def generate_proposal_api(request: ProposalRequest):
             input_state["current_draft"] = request.current_draft
             
         # 3. Invoke the graph
-        # Because 'current_draft' is standard TypedDict, passing it here
-        # AUTOMATICALLY overrides whatever LangGraph had saved in MongoDB!
         final_state = proposal_agent_graph.invoke(input_state, config=config)
         
         return {

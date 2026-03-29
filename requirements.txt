@@ -15,3 +15,5 @@ pymongo
 langgraph
 langgraph-checkpoint-mongodb
 huggingface_hub
+langchain_groq
+langgraph-checkpoint-mongodb
