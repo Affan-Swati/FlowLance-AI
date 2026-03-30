@@ -25,8 +25,17 @@ def classify_user_domain(user_data: dict) -> str:
     hf_token = os.getenv("HUGGINGFACE_API_KEY")
     history = user_data.get("history", user_data.get("portfolioHistory", []))
     
-    resume = user_data.get("resume_data") or {}
-    resume_skills = resume.get("skills", [])
+    # Handle multiple resumes
+    resumes = user_data.get("resume_data") or []
+    if isinstance(resumes, dict): # Fallback if a single dict is passed
+        resumes = [resumes]
+        
+    resume_skills = []
+    for r in resumes:
+        resume_skills.extend(r.get("skills", []))
+        
+    # Deduplicate skills while preserving order
+    resume_skills = list(dict.fromkeys(resume_skills))
     
     if not hf_token or (not history and not resume_skills):
         return "Software Engineering"
@@ -39,7 +48,7 @@ def classify_user_domain(user_data: dict) -> str:
         gigs_summary.append(f"{gig.get('gigTitle', '')} ({', '.join(tasks)})")
     
     compact_gigs = " | ".join(gigs_summary)
-    compact_skills = ", ".join(resume_skills[:15]) # Top 15 skills
+    compact_skills = ", ".join(resume_skills[:15]) # Top 15 skills across ALL resumes
     
     messages = [
         {
@@ -118,7 +127,6 @@ def get_market_trends(domain: str) -> dict:
             elif s_max:
                 salaries.append(s_max)
                 
-        # FIXED: Convert annual to hourly, and apply a "global freelance rate" modifier (0.7)
         hourly = [round((s / 2000) * 0.7, 2) for s in salaries] if salaries else [25, 40, 65]
         
         avg_rate = round(sum(hourly) / len(hourly), 2)
@@ -160,14 +168,26 @@ def generate_career_insights(user_data: dict, market_data: dict) -> dict:
             "tasks": [m.get("title") for m in gig.get("milestones", [])]
         })
 
-    # Compress Resume Data
-    resume = user_data.get("resume_data") or {}
-    resume_skills = resume.get("skills", [])[:15] # Take top 15 skills to save tokens
-    
-    # Safely extract and stringify their education/experience without blowing up context window
-    resume_background = str(resume.get("data", {}))[:1200] 
+    # Compress Multiple Resumes Data
+    resumes = user_data.get("resume_data") or []
+    if isinstance(resumes, dict):
+        resumes = [resumes]
 
-    # 🚀 FIXED PROMPT: Enforced strict 2nd person phrasing ("you") and mutually exclusive advice topics
+    resume_skills = []
+    resume_backgrounds = []
+
+    for r in resumes:
+        resume_skills.extend(r.get("skills", []))
+        bg_data = r.get("data", {})
+        if bg_data:
+            resume_backgrounds.append(str(bg_data))
+
+    # Deduplicate skills and take top 15 total to save tokens
+    resume_skills = list(dict.fromkeys(resume_skills))[:15] 
+    
+    # Safely extract and stringify their education/experience from ALL resumes
+    resume_background = " | ".join(resume_backgrounds)[:1200]
+
     messages = [
         {"role": "system", "content": "You are an elite executive career advisor speaking directly to the freelancer. Always use 'you' and 'your'. NEVER use third-person terms like 'the user' or 'the freelancer'. Return ONLY JSON."},
         {"role": "user", "content": f"""

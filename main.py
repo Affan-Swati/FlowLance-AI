@@ -33,7 +33,7 @@ class AnalyticsPayload(BaseModel):
     freelancerProfile: Dict[str, Any]
     portfolioHistory: List[Dict[str, Any]]
     domain: Optional[str] = None
-    resumeData: Optional[Dict[str, Any]] = None
+    resumeData: Optional[List[Dict[str, Any]]] = []
 
 # --- Routes ---
 
