@@ -49,6 +49,13 @@ async def process_resume_api(
         
         # 1. Parse PDF
         extracted_data = scan_resume(file_bytes)
+        if extracted_data is None:
+            logger.warning(
+                "Resume scanner returned no structured data for User: %s, Resume: %s. Proceeding with empty payload.",
+                user_id,
+                resume_id
+            )
+            extracted_data = {}
         
         # 2. Ingest into RAG and MongoDB with the unique resume_id
         ingestion_result = process_and_store_resume(user_id, resume_id, extracted_data)

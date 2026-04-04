@@ -31,6 +31,8 @@ def process_and_store_resume(user_id: str, resume_id: str, data: dict):
     Parses resume data into chunks and stores it with user_id and resume_id metadata.
     Does NOT overwrite gridfs_file_id or originalname set by Node.js controller.
     """
+    if not isinstance(data, dict):
+        data = {}
 
     # Upsert only the AI-extracted resume_data and timestamps
     # Node.js will separately set gridfs_file_id and originalname
