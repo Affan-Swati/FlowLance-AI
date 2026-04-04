@@ -12,6 +12,7 @@ from agents.rag_ingestor import process_and_store_resume, remove_resume # Added 
 from agents.search_agent import search_freelancers
 from agents.Proposal.proposal_graph import proposal_agent_graph
 from agents.analytics_agent import get_market_trends, generate_career_insights, classify_user_domain
+from agents.Gig.gig_graph import gig_agent_graph
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -34,6 +35,23 @@ class AnalyticsPayload(BaseModel):
     portfolioHistory: List[Dict[str, Any]]
     domain: Optional[str] = None
     resumeData: Optional[List[Dict[str, Any]]] = []
+
+class GigMilestoneRequest(BaseModel):
+    gig_id: str                
+    job_description: str
+    start_date: str
+
+class MilestoneEstimate(BaseModel):
+    title: str
+    description: str
+    startDate: str
+    dueDate: str
+    paymentAmount: float
+
+class GigMilestoneResponse(BaseModel):
+    status: str
+    gig_id: str
+    milestones: List[MilestoneEstimate]
 
 # --- Routes ---
 
@@ -171,5 +189,33 @@ async def analyze_portfolio_api(payload: AnalyticsPayload):
         logger.error(f"Portfolio Analysis Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/agents/gig/generate-milestones", response_model=GigMilestoneResponse)
+async def generate_gig_milestones_api(request: GigMilestoneRequest):
+    try:
+        # 1. Use the gig_id as the thread_id for persistent memory in MongoDB
+        config = {"configurable": {"thread_id": f"gig_agent_{request.gig_id}"}}
+        
+        # 2. Prepare the input state for the LangGraph
+        input_state = {
+            "gig_id": request.gig_id,
+            "job_description": request.job_description,
+            "start_date": request.start_date
+        }
+            
+        final_state = gig_agent_graph.invoke(input_state, config=config)
+        
+        generated_data = final_state.get("generated_json", {})
+        milestones = generated_data.get("milestones", [])
+        
+        return {
+            "status": "success",
+            "gig_id": request.gig_id,
+            "milestones": milestones
+        }
+        
+    except Exception as e:
+        logger.error(f"Gig Milestone Generation Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
