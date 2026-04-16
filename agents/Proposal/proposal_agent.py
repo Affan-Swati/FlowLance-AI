@@ -134,4 +134,4 @@ def generate_draft_action(job_title, job_description, resume_context, user_promp
         return clean_output(raw_text)
     except Exception as e:
         print(f"❌ Error communicating with Ollama: {e}")
-        return "Failed to generate proposal due to an AI service error."
+        raise RuntimeError(f"Ollama Connection Error: Make sure Ollama is running at {OLLAMA_ENDPOINT}. Details: {e}")
