@@ -1,5 +1,6 @@
 import os
 import logging
+from uuid import uuid4
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
@@ -11,6 +12,8 @@ from agents.scanner_agent import scan_resume
 from agents.rag_ingestor import process_and_store_resume, remove_resume # Added remove_resume import
 from agents.search_agent import search_freelancers
 from agents.Proposal.proposal_graph import proposal_agent_graph
+from agents.Messaging.messaging_graph import messaging_agent_graph
+from agents.Messaging.messaging_agent import simulate_client_message_action, analyze_message_action
 from agents.analytics_agent import get_market_trends, generate_career_insights, classify_user_domain
 from agents.Gig.gig_graph import gig_agent_graph
 
@@ -52,6 +55,19 @@ class GigMilestoneResponse(BaseModel):
     status: str
     gig_id: str
     milestones: List[MilestoneEstimate]
+
+class MessagingRequest(BaseModel):
+    thread_id: Optional[str] = None
+    user_id: str
+    client_name: Optional[str] = None
+    gig_context: Optional[str] = None
+    latest_message: Optional[str] = None
+    conversation_history: Optional[List[Dict[str, str]]] = None
+
+class ClientSimulationRequest(BaseModel):
+    client_name: Optional[str] = None
+    gig_context: Optional[str] = None
+    conversation_history: Optional[List[Dict[str, str]]] = None
 
 # --- Routes ---
 
@@ -155,7 +171,85 @@ async def generate_proposal_api(request: ProposalRequest):
     except Exception as e:
         logger.error(f"Proposal Generation Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-    
+
+@app.post("/api/agents/messaging/generate-reply")
+async def generate_messaging_reply_api(request: MessagingRequest):
+    try:
+        final_thread_id = request.thread_id or f"messaging_{request.user_id}_{uuid4().hex}"
+        latest_message = request.latest_message
+
+        if not latest_message or not latest_message.strip():
+            latest_message = simulate_client_message_action(
+                gig_context=request.gig_context or "",
+                client_name=request.client_name or "Client",
+                conversation_history=request.conversation_history or []
+            )
+
+        config = {"configurable": {"thread_id": final_thread_id}}
+        input_state = {
+            "thread_id": final_thread_id,
+            "user_id": request.user_id,
+            "client_name": request.client_name or "Client",
+            "gig_context": request.gig_context or "",
+            "conversation_history": request.conversation_history or [],
+            "latest_message": latest_message,
+            "sentiment": "",
+            "intent": "",
+            "generated_reply": ""
+        }
+
+        final_state = messaging_agent_graph.invoke(input_state, config=config)
+
+        return {
+            "status": "success",
+            "thread_id": final_state.get("thread_id", config["configurable"]["thread_id"]),
+            "reply": final_state.get("generated_reply", ""),
+            "sentiment": final_state.get("sentiment", ""),
+            "intent": final_state.get("intent", ""),
+            "latest_message": latest_message
+        }
+    except Exception as e:
+        logger.error(f"Messaging Reply Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/agents/messaging/analyze-message")
+async def analyze_messaging_api(request: MessagingRequest):
+    try:
+        latest_message = request.latest_message
+        if not latest_message or not latest_message.strip():
+            raise HTTPException(status_code=400, detail="latest_message is required for analysis")
+
+        analysis = analyze_message_action(
+            latest_message=latest_message,
+            gig_context=request.gig_context or "",
+            client_name=request.client_name or "Client"
+        )
+
+        return {
+            "status": "success",
+            "sentiment": analysis["sentiment"],
+            "intent": analysis["intent"]
+        }
+    except Exception as e:
+        logger.error(f"Messaging Analysis Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/agents/messaging/simulate-client-message")
+async def simulate_client_message_api(request: ClientSimulationRequest):
+    try:
+        message = simulate_client_message_action(
+            gig_context=request.gig_context or "",
+            client_name=request.client_name or "Client",
+            conversation_history=request.conversation_history or []
+        )
+        return {
+            "status": "success",
+            "latest_message": message
+        }
+    except Exception as e:
+        logger.error(f"Client Simulation Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/analyze-portfolio")
 async def analyze_portfolio_api(payload: AnalyticsPayload):
     try:
