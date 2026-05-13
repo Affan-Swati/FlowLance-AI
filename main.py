@@ -13,6 +13,7 @@ from agents.search_agent import search_freelancers
 from agents.Proposal.proposal_graph import proposal_agent_graph
 from agents.analytics_agent import get_market_trends, generate_career_insights, classify_user_domain
 from agents.Gig.gig_graph import gig_agent_graph
+from agents.ResumeOptimizer.resume_optimizer_agent import optimize_resume
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -52,6 +53,10 @@ class GigMilestoneResponse(BaseModel):
     status: str
     gig_id: str
     milestones: List[MilestoneEstimate]
+
+class ResumeOptimizerRequest(BaseModel):
+    user_id: str
+    resume_id: str
 
 # --- Routes ---
 
@@ -217,5 +222,39 @@ async def generate_gig_milestones_api(request: GigMilestoneRequest):
         logger.error(f"Gig Milestone Generation Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     
+@app.post("/api/agents/resume/optimize")
+async def optimize_resume_api(request: ResumeOptimizerRequest):
+    try:
+        logger.info(f"Optimising resume {request.resume_id} for user {request.user_id}")
+
+        from pymongo import MongoClient
+        mongo_client = MongoClient(os.getenv("MONGO_URI"))
+        profile_doc = mongo_client["test"]["freelancer_profiles"].find_one(
+            {"user_id": request.user_id, "resume_id": request.resume_id}
+        )
+
+        if not profile_doc:
+            raise HTTPException(status_code=404, detail="Resume profile not found. Please re-upload the resume.")
+
+        resume_data = profile_doc.get("resume_data")
+        if not resume_data:
+            raise HTTPException(status_code=422, detail="Resume data is empty. Please re-upload the resume.")
+
+        result = optimize_resume(resume_data)
+
+        return {
+            "status":   "success",
+            "resume_id": request.resume_id,
+            "overall":  result.get("overall", ""),
+            "sections": result.get("sections", []),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Resume Optimisation Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
